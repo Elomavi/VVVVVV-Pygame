@@ -23,7 +23,7 @@ editorGuide = open("editorGuide.txt", "r")
 editorGuide = editorGuide.read().splitlines()
 
 pygame.init()
-screenSize = [960, 736] # 1536, 864
+screenSize = [1536, 864] # 1536, 864
 screen = pygame.display.set_mode(screenSize)
 pygame.display.set_caption("VVVVVV Editor")
 pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
@@ -31,6 +31,8 @@ done = False
 menu = False
 typing = False     # Boolean for determining if the player is typing
 fastdelete = False
+tabbed = False      # Is the player drawing or selecting an icon?
+pendingtab = False
 typingTime = 0
 clock = pygame.time.Clock()
 bigfont = pygame.font.Font('./assets/PetMe64.ttf', 24)
@@ -47,11 +49,11 @@ class Room:
         self.tiles = {}         # Object containing all tiles in the room
         self.platforms = []     # Array of all moving platforms in the room
         self.enemies = []       # Array of all enemies in the room
+        self.targets = []
         self.lines = []         # Array of all the gravity lines in the room
         self.meta = {"name": "Outer Space", "color": 0, "tileset": 0, "warp": 0, "enemyType": [1, 1, 1]}
         self.exists = True
-
-        try:  # Attempt to open the room file
+        try:
             with open("./" + levelFolder + "/" + str(self.x) + "," + str(self.y) + '.vvvvvv', 'r') as lvl:
                 level = json.loads(lvl.read())
                 self.tiles = level["tiles"]
@@ -59,8 +61,13 @@ class Room:
                 self.enemies = level["enemies"]
                 self.lines = level["lines"]
                 self.meta = level["meta"]
+                try:  # Attempt to open the room file
+                    self.targets = level["targets"]
+                except KeyError:
+                    self.targets = []
         except FileNotFoundError:
             self.exists = False
+
                 
 class Settings:
                                 # Initialize settings on startup.
@@ -105,6 +112,7 @@ startPoint = [[], []]
 
 tile = 0
 brushSize = 1
+prevSize = 1
 specialMode = False
 
 specialID = -1
@@ -247,7 +255,7 @@ def draw(tileID, position, justOne=False):
 
     for x in range(topleft[0], bottomright[0]):
         for y in range(topleft[1], bottomright[1]):
-            if 20 > y >= 0 and 30 > x >= 0:
+            if 27 > y >= 0 and 48 > x >= 0:
                 coords = str(x) + "," + str(y) + ","
                 if tileID == -1:
                     layer = 2
@@ -272,9 +280,10 @@ teleSheet = Spritesheet("./assets/teleporters.png")
 editorSheet = Spritesheet("./assets/editorTiles.png")
 enemySheetSmall = Spritesheet("./assets/enemies_small.png")
 enemySheetLarge = Spritesheet("./assets/enemies_large.png")
+target = pygame.image.load("./assets/target.png").convert_alpha()
 
 def loadsprites():
-    global sprites, groundTiles, backgroundTiles, enemySprites, specialSprites, spikeTiles, warpBGs
+    global sprites, groundTiles, backgroundTiles, enemySprites, specialSprites, spikeTiles, warpBGs, target
     sprites = []
     warpBGs = []
     enemySprites = [[], []]
@@ -301,9 +310,8 @@ def loadsprites():
 
     sprites.append(editorTiles[9])
     sprites.append(editorTiles[8])
-
-    appendeach(teleSheet.split(384, 384, 1), sprites)
-
+    appendeach(teleSheet.split(384, 384, 5), sprites) # 52-56
+    sprites.append(target) # 57
     for i in range(30):
         img = editorTiles[i]
         img.set_colorkey((0, 0, 0))
@@ -313,12 +321,12 @@ def saveLevel():
     if not os.path.exists(levelFolder):
         os.makedirs(levelFolder)
     with open("./" + levelFolder + "/" + roomStr + ".vvvvvv", 'w') as data:
-        leveldata = {"meta": room.meta, "enemies": room.enemies, "warp": room.meta["warp"], "platforms": room.platforms, "lines": room.lines, "tiles": room.tiles}
+        leveldata = {"meta": room.meta, "enemies": room.enemies, "warp": room.meta["warp"], "platforms": room.platforms, "targets": room.targets, "lines": room.lines, "tiles": room.tiles}
         json.dump(leveldata, data)
         lastRoom = [room.x, room.y]
         print("✅ Saved to", roomStr + ".vvvvvv!")
         
-WHITE = grey(255)
+WHITE = (255,255,255)
 
 loadFolder(levels[0])
 roomTimer = 0
@@ -341,16 +349,21 @@ while not done:
 
     for i in room.platforms:
         screen.blit(sprites[37], (i[0], i[1]))
-        metadata = medFont.render(getDirection(i[2], i[3])[1], 1, grey(255))
+        metadata = medFont.render(getDirection(i[2], i[3])[1], 1, WHITE)
         screen.blit(metadata, ((i[0]) + 5, (i[1]) + 5))
 
     for i in room.enemies:
         size = i[4]
         eType = room.meta["enemyType"][size]
         screen.blit(enemySprites[size][eType][0], (i[0], i[1]))
-        metadata = medFont.render(getDirection(i[2], i[3])[1], 1, grey(255))
+        metadata = medFont.render(getDirection(i[2], i[3])[1], 1, WHITE)
         screen.blit(metadata, ((i[0]) + 5, (i[1]) + 5))
 
+    for i in room.targets:
+        screen.blit(target, (i[0], i[1]))
+        metadata = medFont.render(getDirection(i[2], i[3])[1], 1, WHITE)
+        screen.blit(metadata, ((i[0]) + 5, (i[1]) + 5))
+        
     for i in room.lines:
         if i[3]: line(screen, WHITE, (i[0]-3, i[1]), (i[0]-3, i[1]+i[2]), 4)
         else:    line(screen, WHITE, (i[0], i[1]+1), (i[0]+i[2], i[1]+1), 4)
@@ -359,12 +372,12 @@ while not done:
     if room.meta["tileset"] == 8:     # Lab tileset
         gridCol = grey(50)
 
-    for i in range(30):
+    for i in range(48):
         i *= 32
-        line(screen, gridCol, (i, 0), (i, 640), 2)
+        line(screen, gridCol, (i, 0), (i, 864), 2)
 
-    for i in range(21):
-        i *= 32 
+    for i in range(28):
+        i *= 32
         line(screen, gridCol, (0, i), (screenSize[0], i), 2)
 
     if len(room.meta["name"]) > 0:
@@ -372,13 +385,16 @@ while not done:
         if typing:
             if roomTimer % 60 < 30:
                 underscore = '_'
-        roomname = bigfont.render(room.meta["name"] + underscore, 1, grey(255))
+        roomname = bigfont.render(room.meta["name"] + underscore, 1, WHITE)
         roomNameX = (screenSize[0] / 2) - (roomname.get_width() / 2)
-        screen.blit(roomname, (roomNameX, screenSize[1] - 122))  # Render room nome
+        if tabbed:
+            screen.blit(roomname, (roomNameX, screenSize[1] - 90))  # Render room nome
+        else:
+            screen.blit(roomname, (roomNameX, screenSize[1] - 26))  # Render room nome           
     else:
-        roomname = bigfont.render('<Enter Name>', 1, grey(255))
+        roomname = bigfont.render('<Enter Name>', 1, WHITE)
         roomNameX = (screenSize[0] / 2) - (roomname.get_width() / 2)
-        screen.blit(roomname, (roomNameX, screenSize[1] - 122))  # Render room nome
+        screen.blit(roomname, (roomNameX, screenSize[1] - 90))  # Render room nome
     #######################################
 
     cursor = pygame.mouse.get_pos()
@@ -386,14 +402,25 @@ while not done:
     mouse = pygame.mouse.get_pressed()
     
     roomStr = str(room.x) + "," + str(room.y)
-
+    movingEntity = specialMode and (specialTiles[specialID][0].startswith("enemy") or specialTiles[specialID][0] == "platform" or specialTiles[specialID][0] == "target")
     gridX = math.floor(cursor[0] / 32)
     gridY = math.floor(cursor[1] / 32)
-    legal = gridY < 20
-    picker = gridY == 21
-    specialPicker = gridY == 22
+    
+    if tabbed:
+        legal = gridY < 25
+        picker = gridY == 25
+        specialPicker = gridY == 26
+    else:
+        legal = gridY < 27
+        picker = gridY == 99
+        specialPicker = gridY == 99
 
-    movingEntity = specialMode and (specialTiles[specialID][0].startswith("enemy") or specialTiles[specialID][0] == "platform")
+    if cursor[1] > screenSize[1] + 16:
+        tabbed = True
+        pendingtab = True
+    elif pendingtab == True and cursor[1] < screenSize[1] - 64:
+        tabbed = False
+        pendingtab = False
 
     if legal:
         if not specialMode:
@@ -410,13 +437,20 @@ while not done:
         if event.type == pygame.MOUSEBUTTONDOWN and not menu:
             if event.button == 1:
                 if picker:
+                    if brushSize > 1:
+                        prevSize = brushSize
                     specialMode = False
                     tile = gridX
+                    if 26 <= tile and tile <= 29:
+                        brushSize = 1
+                    elif prevSize > 1:
+                        brushSize = prevSize
                 elif specialPicker and specialTiles[gridX][0] != "empty":
                     specialMode = True
                     tile = specialTiles[gridX][0]
                     specialID = gridX
-                    
+        if event.type == pygame.MOUSEBUTTONUP and not menu and not (picker or specialPicker):
+            saveLevel()
         if event.type == pygame.KEYDOWN and typing:     # Typing on screen, includes fast-typing and fast-deleting by holding the button.
             typingTime = roomTimer
             if event.key == pygame.K_RETURN:
@@ -434,8 +468,6 @@ while not done:
         elif event.type == pygame.KEYUP and typing:
             fastdelete = False
             typingTime = -1
-            print(typingTime)
-
                 
         elif event.type == pygame.KEYDOWN and not menu:
 
@@ -443,42 +475,37 @@ while not done:
                 if event.key == eval("pygame.K_F" + str(i)) and i <= len(levels):
                     loadFolder(levels[i-1])
             if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
-                from vvvvvv import buildmenu
+                import vvvvvv
                 saveLevel()
                 done = True
-                p = Pool(1)
-                with p:
-                    screen = pygame.display.quit()
-                    pygame.display.set_caption("VVVVVV Script handler")
-                    pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
-                    p.map(buildmenu, [0,1])
+                # vvvvvv.epstein_didnt_kill_himself = False
+##                p = Pool(1)
+##                with p:
+##                    screen = pygame.display.quit()
+##                    pygame.display.set_caption("VVVVVV Script handler")
+##                    pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
+##                    p.map(str2bool, ['e','e'])
             elif event.key == pygame.K_RIGHT:
-                if roomTimer > 120:
-                    saveLevel()
                 roomTimer = 0
                 room.x += 1
                 loadroom()
             elif event.key == pygame.K_LEFT:
-                if roomTimer > 120:
-                    saveLevel()
                 roomTimer = 0
                 room.x -= 1
                 loadroom()
             elif event.key == pygame.K_UP:
-                if roomTimer > 120:
-                    saveLevel()
                 roomTimer = 0
                 room.y += 1
                 loadroom()
             elif event.key == pygame.K_DOWN:
-                if roomTimer > 120:
-                    saveLevel()
                 roomTimer = 0
                 room.y -= 1
                 loadroom()
             elif event.key == pygame.K_r:
                 typing = True
                 text = room.meta["name"]
+            elif event.key == pygame.K_TAB:
+                tabbed = not tabbed
             elif event.key == pygame.K_SPACE:
 
                 def nearsolid(obj, special):
@@ -500,7 +527,7 @@ while not done:
                             try:
                                 near[t] = str(nearsolid(room.tiles[buildcoords(near[t])], warpZone) + 0)
                             except KeyError:
-                                if near[t][0] == -1 or near[t][0] == 30 or near[t][1] == -1 or near[t][1] == 20:
+                                if near[t][0] == -1 or near[t][0] == 48 or near[t][1] == -1 or near[t][1] == 27:
                                     near[t] = "1"
                                 else:
                                     near[t] = "0"
@@ -520,7 +547,7 @@ while not done:
                                 try:
                                     near[t] = str(nearsolid(room.tiles[buildcoords(near[t])], warpZone) + 0)
                                 except KeyError:
-                                    if near[t][0] == -1 or near[t][0] == 30 or near[t][1] == -1 or near[t][1] == 20:
+                                    if near[t][0] == -1 or near[t][0] == 48 or near[t][1] == -1 or near[t][1] == 27:
                                         near[t] = "1"
                                     else:
                                         near[t] = "0"
@@ -545,7 +572,7 @@ while not done:
                 if entitySpeed < 0: entitySpeed = 0
                 if entitySpeed > 50: entitySpeed = 50
 
-                if event.key == pygame.K_TAB:
+                if event.key == pygame.K_e:
                     entityDirection += 1
                     if entityDirection > 3: entityDirection = 0
 
@@ -672,6 +699,9 @@ while not done:
                     draw(51, [gridX, gridY])
                 elif tile == "teleporter":
                     draw(52, [gridX, gridY], True)
+                elif tile == "target":
+                    xspeed, yspeed = getSpeed()
+                    room.targets.append([gridX * 32, gridY * 32, xspeed, yspeed, 0])
 
         if mouse[2] and not menu:
             if legal:
@@ -684,65 +714,74 @@ while not done:
                 for (y, x) in enumerate(room.enemies):
                     if x[0] == gridX*32 and x[1] == gridY*32:
                         del room.enemies[y]
-
+                        
+                for (y, x) in enumerate(room.targets):
+                    if x[0] == gridX*32 and x[1] == gridY*32:
+                        del room.targets[y]
+                        
                 for (y, x) in enumerate(room.lines):
                     if (x[3] and x[0]-16 == gridX*32 and x[1] == gridY*32) or (not x[3] and x[0] == gridX*32 and x[1]-16 == gridY*32):
                         del room.lines[y]
 
     if typingTime + 25 < roomTimer and typingTime > 0 and typing: # Part 2 of the typing code
-        if roomTimer % 4 == 0 and fastdelete == True:
+        if roomTimer % 3 == 0 and fastdelete == True:
             text = text[:-1]            
         elif roomTimer % 5 == 0:
             text += addkey
         room.meta["name"] = text
-        print('5 frames')
     if menu:
         rect(screen, grey(0), (0, 0, screenSize[0], screenSize[1]), 0)
         pos = 10
         for textline in editorGuide:
-            text = medFont.render(textline, 1, grey(255))
+            text = medFont.render(textline, 1, WHITE)
             screen.blit(text, (10, pos))
             pos += 25
-
     else:
-        rect(screen, grey(0), (0, 642, screenSize[0], 128), 0)
-
-        for i in range(len(sprites)):
-            if i < 30:
-                screen.blit(sprites[i], (i*32, 672))
-            if i == tile and not specialMode:
-                rect(screen, WHITE, (i*32, 672, 32, 32), 3)
-
-        for i in range(len(specialTiles)):
-            screen.blit(specialSprites[i], (i * 32, 704))
-            if i == specialID and specialMode:
-                rect(screen, WHITE, (i*32, 704, 32, 32), 3)
-
-        if picker or specialPicker:
-            rect(screen, WHITE, (gridX * 32, gridY * 32, 32, 32), 5)
-
-        helpText = font.render("Press H to open the editor guide", 1, (255, 255, 255))
-
-        if specialMode:
-            helpText = font.render(specialTiles[specialID][3], 1, (255, 255, 255))
-            if movingEntity:
-                currentSpeed = medFont.render("Entity Speed: " + str(entitySpeed), 1, (255, 255, 0))
-                currentDir = medFont.render("Direction: " + directions[entityDirection], 1, (255, 255, 0))
-                screen.blit(currentSpeed, (screenSize[0] - currentSpeed.get_width() - 10, 10))
-                screen.blit(currentDir, (screenSize[0] - currentDir.get_width() - 10, 40))
-
-        screen.blit(helpText, (10, screenSize[1] - 84))
-
-        if startPoint[0] == [room.x, room.y]:   # Render player at start point
-            screen.blit(sprites[30], (startPoint[1][0], startPoint[1][1]))
-
+        
+        # Stuff that happens if you're not in a menu, regardless if you're tabbed or not.
         roomMsg = roomStr
         if [room.x, room.y] != lastRoom:
             roomMsg += " | BACKSPACE to return to " + str(lastRoom[0]) + "," + str(lastRoom[1])
-        coords = font.render(roomMsg, 1, grey(255))
-        screen.blit(coords, (10, 10))
+        if startPoint[0] == [room.x, room.y]:   # Render player at start point
+            screen.blit(sprites[30], (startPoint[1][0], startPoint[1][1]))
+        if movingEntity:    
+            currentSpeed = medFont.render("Entity Speed: " + str(entitySpeed), 1, (255, 255, 0))
+            currentDir = medFont.render("Direction: " + directions[entityDirection], 1, (255, 255, 0))
+            screen.blit(currentSpeed, (screenSize[0] - currentSpeed.get_width() - 10, 10))
+            screen.blit(currentDir, (screenSize[0] - currentDir.get_width() - 10, 40))
+        coords = font.render(roomMsg, 1, WHITE)           
+        # Happens only if tabbed
+        if tabbed:
+            rect(screen, grey(0), (0, 800, screenSize[0], 96), 0)
 
+            for i in range(len(sprites)):
+                if i < 30:
+                    screen.blit(sprites[i], (i*32, 800))
+                if i == tile and not specialMode:
+                    rect(screen, WHITE, (i*32, 800, 32, 32), 3)
 
+            for i in range(len(specialTiles)):
+                screen.blit(specialSprites[i], (i * 32, 832))
+                if i == specialID and specialMode:
+                    rect(screen, WHITE, (i*32, 832, 32, 32), 3)
+                    
+
+            if specialMode:
+                helpText = font.render(specialTiles[specialID][3], 1, (255, 255, 255))
+                
+            else:
+                helpText = font.render("Press H to open the editor guide", 1, (255, 255, 255))
+                
+            screen.blit(helpText, (screenSize[0] - helpText.get_width() - 10, screenSize[1] - 20))
+        # Happens only if not tabbed
+        else:
+            if picker or specialPicker:
+                rect(screen, WHITE, (gridX * 32, gridY * 32, 32, 32), 5)
+
+            helpText = font.render("Press TAB to open tile selection", 1, (255, 255, 255))
+            screen.blit(helpText, (screenSize[0] - helpText.get_width() - 10, screenSize[1] - 20))
+
+        screen.blit(coords, (10, 10))          
     # Draw everything and set FPS
     pygame.display.flip()
     clock.tick(60)

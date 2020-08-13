@@ -1,6 +1,6 @@
 Editor guide ^.^
 
-arrow keys: change room (does not save)
+arrow keys: change room
 left click: place object
 right click: delete object
 space: auto-connect tiles (except in warp zone)
@@ -10,7 +10,7 @@ S: save room
 f1-f12: change area
 
 +/-: change brush size or entity speed, shift for 5x
-tab: change entity direction
+shift: change entity direction
 square brackets: change enemy type
 shift + square brackets: change large enemy type
 backspace: jump to last existing room

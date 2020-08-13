@@ -4,7 +4,7 @@
         "name": "The Space Station",
         "music": "space",
         "startingRoom": [5, 5],
-        "startingCoords": [320, 320],
+        "startingCoords": [320, 440],
         "defaultTilesets": [0, 1, 2, 3, 4, 5, 6]
     },
 
@@ -24,5 +24,14 @@
         "startingRoom": [5, 5],
         "startingCoords": [250, 160],
         "defaultTilesets": [7]
+    },
+	
+	{
+        "folder": "colordist",
+        "name": "Break the Targets!",
+        "music": "targets",
+        "startingRoom": [5, 5],
+        "startingCoords": [250, 160],
+        "defaultTilesets": [0, 1, 2, 3, 4, 5, 6, 7, 8]
     }
 ]
